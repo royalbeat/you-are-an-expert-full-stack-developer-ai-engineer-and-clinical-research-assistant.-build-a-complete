@@ -13,8 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Next.js Template",
-  description: "A minimal Next.js starter template",
+  title: "AI Clinical Evidence Assistant",
+  description:
+    "Evidence-based medicine AI that searches PubMed, converts clinical questions to PICO format, and synthesizes research evidence to answer clinical questions.",
+  keywords: ["evidence-based medicine", "PubMed", "PICO", "clinical research", "AI", "systematic review"],
 };
 
 export default function RootLayout({
