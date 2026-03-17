@@ -2,11 +2,11 @@
 
 @layer base {
   :root {
-    --color-bg: #0a0f1e;
-    --color-surface: #0d1528;
-    --color-surface-2: #111c35;
-    --color-border: #1e2d4a;
-    --color-border-bright: #2a3f6a;
+    --color-bg: #000000;
+    --color-surface: #0a0a0a;
+    --color-surface-2: #111111;
+    --color-border: #1a1a1a;
+    --color-border-bright: #2a2a2a;
     --color-accent: #3b82f6;
     --color-accent-2: #6366f1;
     --color-success: #10b981;
