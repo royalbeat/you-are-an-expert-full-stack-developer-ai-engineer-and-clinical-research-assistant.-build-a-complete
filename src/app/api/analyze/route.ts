@@ -79,75 +79,76 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string>
 
 // ─── Step 1 + 2 + 3: PICO + Keywords + Boolean Query ─────────────────────────
 
+function toKeywords(text: string): string {
+  // Derive simple keyword string from plain text as fallback
+  return `(${text.split(/\s+/).slice(0, 4).join("* OR ")}*)`;
+}
+
+function parseJSON<T>(raw: string): T {
+  const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  // Extract first JSON object if extra text surrounds it
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON object found in response");
+  return JSON.parse(match[0]) as T;
+}
+
 async function generatePicoAndQuery(
   question: string
 ): Promise<{ pico: PicoBreakdown; query: PubMedQuery }> {
-  const systemPrompt = `You are an expert clinical research librarian and evidence-based medicine specialist.
-Your task is to convert clinical questions into structured PICO format and generate optimized PubMed Boolean search queries.
-Always respond with valid JSON only — no markdown, no explanation, just the raw JSON object.`;
+  // Step 1: Get PICO breakdown (small, focused prompt)
+  const picoRaw = await callAI(
+    "You are a clinical research expert. Respond with valid JSON only. No markdown, no explanation.",
+    `Extract PICO components from this clinical question: "${question}"
 
-  const userPrompt = `Convert the following clinical question into PICO format and generate a PubMed search query.
+Return ONLY this JSON (no extra text):
+{"P":"population","I":"intervention","C":"comparison","O":"outcome","clinicalQuestion":"full pico question"}`
+  );
 
-Clinical Question: "${question}"
-
-Return ONLY a JSON object with this exact structure:
-{
-  "P": "Population description",
-  "I": "Intervention description",
-  "C": "Comparison description (use 'placebo', 'standard care', or 'no intervention' if not specified)",
-  "O": "Outcome description",
-  "clinicalQuestion": "A clear, complete PICO-formatted clinical question",
-  "P_keywords": "((keyword1) OR (keyword2) OR (MeSH[MeSH Terms]) OR (synonym*))",
-  "I_keywords": "((keyword1) OR (keyword2) OR (MeSH[MeSH Terms]) OR (synonym*))",
-  "C_keywords": "((keyword1) OR (keyword2) OR (MeSH[MeSH Terms]) OR (synonym*))",
-  "O_keywords": "((keyword1) OR (keyword2) OR (MeSH[MeSH Terms]) OR (synonym*))"
-}
-
-For keywords:
-- Include synonyms, MeSH terms, truncated forms with *, related clinical terms
-- Use proper PubMed syntax
-- Join synonyms with OR, wrap in parentheses
-- Include MeSH terms like: "Diabetes Mellitus"[MeSH Terms]`;
-
-  const raw = await callAI(systemPrompt, userPrompt);
-
-  let parsed: {
-    P: string;
-    I: string;
-    C: string;
-    O: string;
-    clinicalQuestion: string;
-    P_keywords: string;
-    I_keywords: string;
-    C_keywords: string;
-    O_keywords: string;
-  };
-
+  let pico: PicoBreakdown;
   try {
-    // Strip potential markdown code fences
-    const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    parsed = JSON.parse(cleaned);
+    pico = parseJSON<PicoBreakdown>(picoRaw);
   } catch {
-    throw new Error(`Failed to parse PICO JSON from AI: ${raw.slice(0, 200)}`);
+    throw new Error(`Failed to parse PICO JSON from AI: ${picoRaw.slice(0, 200)}`);
   }
 
-  const booleanQuery = `(${parsed.P_keywords})\nAND\n(${parsed.I_keywords})\nAND\n(${parsed.C_keywords})\nAND\n(${parsed.O_keywords})`;
+  // Step 2: Get PubMed keywords (separate focused prompt)
+  const kwRaw = await callAI(
+    "You are a PubMed search expert. Respond with valid JSON only. No markdown, no explanation.",
+    `Generate PubMed keyword strings for each PICO component.
+
+P (Population): ${pico.P}
+I (Intervention): ${pico.I}
+C (Comparison): ${pico.C}
+O (Outcome): ${pico.O}
+
+Return ONLY this JSON (no extra text):
+{"P_keywords":"(term1 OR term2)","I_keywords":"(term1 OR term2)","C_keywords":"(term1 OR term2)","O_keywords":"(term1 OR term2)"}`
+  );
+
+  let kw: { P_keywords: string; I_keywords: string; C_keywords: string; O_keywords: string };
+  try {
+    kw = parseJSON(kwRaw);
+  } catch {
+    // Fallback: derive keywords from PICO text
+    kw = {
+      P_keywords: toKeywords(pico.P),
+      I_keywords: toKeywords(pico.I),
+      C_keywords: toKeywords(pico.C),
+      O_keywords: toKeywords(pico.O),
+    };
+  }
+
+  const booleanQuery = `(${kw.P_keywords})\nAND\n(${kw.I_keywords})\nAND\n(${kw.C_keywords})\nAND\n(${kw.O_keywords})`;
 
   return {
-    pico: {
-      P: parsed.P,
-      I: parsed.I,
-      C: parsed.C,
-      O: parsed.O,
-      clinicalQuestion: parsed.clinicalQuestion,
-    },
+    pico,
     query: {
       raw: booleanQuery,
       pComponents: {
-        P: parsed.P_keywords,
-        I: parsed.I_keywords,
-        C: parsed.C_keywords,
-        O: parsed.O_keywords,
+        P: kw.P_keywords,
+        I: kw.I_keywords,
+        C: kw.C_keywords,
+        O: kw.O_keywords,
       },
     },
   };
