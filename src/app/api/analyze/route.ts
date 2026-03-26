@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PUBMED_API_KEY = "59b990857d18c6d83a609e928893ec469e08";
 const PUBMED_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
-const OPENROUTER_API_KEY =
-  "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";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const AI_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+const AI_MODEL = "nvidia/nemotron-super-49b-v1:free";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
